@@ -8,6 +8,7 @@ pub struct TM1638 {
     clk: Pin<'C', 9, Output>,
     dio: DynamicPin<'C', 10>,
     disp_buffer: [u8; 8],
+    brightness: u8
 }
 
 impl TM1638 {
@@ -22,6 +23,7 @@ impl TM1638 {
             clk: pc9.into_push_pull_output(),
             dio: pc10.into_dynamic(),
             disp_buffer: [0,0,0,0,0,0,0,0],
+            brightness: 7
         };
 
         me.stb.set_high();
@@ -76,6 +78,10 @@ impl TM1638 {
 
     }
 
+    fn write_display_command (&mut self){
+        self.write_command(0x88 | self.brightness);
+    }
+
     fn update_buffer(&mut self, bank: u8, disp: &[u8; 2]){
 
         match bank {
@@ -95,13 +101,21 @@ impl TM1638 {
         }
     }
 
-    pub fn initialize(&mut self) {
+    pub fn initialize(&mut self, brightness: u8) {
+        self.brightness = brightness & 0x07;
         self.write_command(0xc0);
         let data = self.disp_buffer;
         self.write_display(&data);
-        self.write_command(0x8f);
+        self.write_display_command();
 
     }
+
+    pub fn set_brightness(&mut self, brightness: u8) {
+        self.brightness = brightness & 0x07;
+        self.write_display_command();
+
+    }
+
 
     pub fn display_num (&mut self, bank: u8, number: u8){
 
@@ -120,7 +134,7 @@ impl TM1638 {
         self.write_command(0xc0);
         let data = self.disp_buffer;
         self.write_display(&data);
-        self.write_command(0x8f);
+        self.write_display_command();
     }
 
 

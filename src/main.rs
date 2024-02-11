@@ -52,7 +52,7 @@ fn main() -> ! {
         gpioc.pc10,
     );
 
-    display.initialize();
+    display.initialize(7);
 
     let mut cur_count = 0;
 
@@ -63,6 +63,7 @@ fn main() -> ! {
         display.display_num(3, cur_count+40);
         display.display_num(4, cur_count+80);
 
+        // display.set_brightness(cur_count % 8);
 
         cur_count += 1;
         if cur_count > 99 {
