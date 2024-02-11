@@ -1,4 +1,4 @@
-use stm32f4xx_hal::{gpio::*};
+use stm32f4xx_hal::gpio::*;
 
 pub struct TestPoints {
     pub tp1: Pin<'C', 0, Output<PushPull>>,
