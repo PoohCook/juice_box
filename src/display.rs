@@ -1,14 +1,22 @@
 use stm32f4xx_hal::gpio::*;
 
-pub const DISPLAY_DELAY: u32 = 3;
-pub const DIGITS: [u8; 12] = [0x3f, 0x30, 0x5b, 0x4f, 0x66, 0x6d, 0x7d, 0x07, 0x7f, 0x67, 0x00, 0x40];
+const DISPLAY_DELAY: u32 = 3;
+const DIGITS: [u8; 12] = [0x3f, 0x30, 0x5b, 0x4f, 0x66, 0x6d, 0x7d, 0x07, 0x7f, 0x67, 0x00, 0x40];
+
+pub enum KeyEvent {
+    KeyDown{key: u8},
+    KeyUp{key: u8},
+    KeyErr,
+}
+
 
 pub struct TM1638 {
     stb: Pin<'C', 8, Output>,
     clk: Pin<'C', 9, Output>,
     dio: DynamicPin<'C', 10>,
     disp_buffer: [u8; 8],
-    brightness: u8
+    brightness: u8,
+    key_status: u8,
 }
 
 impl TM1638 {
@@ -23,7 +31,8 @@ impl TM1638 {
             clk: pc9.into_push_pull_output(),
             dio: pc10.into_dynamic(),
             disp_buffer: [0,0,0,0,0,0,0,0],
-            brightness: 7
+            brightness: 7,
+            key_status: 0,
         };
 
         me.stb.set_high();
@@ -48,6 +57,35 @@ impl TM1638 {
             self.clk.set_high();
             cortex_m::asm::delay(DISPLAY_DELAY);
         }
+
+    }
+
+    fn read_byte(&mut self) -> u8{
+
+        let mut data: u8 = 0;
+
+        for i in 0..8 {
+            self.clk.set_low();
+            cortex_m::asm::delay(DISPLAY_DELAY);
+            self.clk.set_high();
+            let mask: u8 = 0x01 << i;
+            if self.dio.is_high().unwrap_or_default() == true {
+                data |= mask;
+            }
+            cortex_m::asm::delay(DISPLAY_DELAY);
+        }
+
+        data
+    }
+
+    fn read_key_bytes(&mut self) -> [u8; 4]{
+
+        let mut data: [u8; 4] = [0,0,0,0];
+        for d  in &mut data {
+            *d = self.read_byte();
+        };
+
+        data
 
     }
 
@@ -116,7 +154,6 @@ impl TM1638 {
 
     }
 
-
     pub fn display_num (&mut self, bank: u8, number: u8){
 
         let mut disp: [u8; 2] = [DIGITS[11], DIGITS[11]];
@@ -137,6 +174,78 @@ impl TM1638 {
         self.write_display_command();
     }
 
+    pub fn read_buttons(&mut self) -> u8{
+
+        self.dio.make_push_pull_output();
+
+        self.stb.set_low();
+        cortex_m::asm::delay(DISPLAY_DELAY);
+        self.write_byte(0x42);
+
+        self.dio.make_floating_input();
+        cortex_m::asm::delay(10);
+
+        let data_bytes = self.read_key_bytes();
+        let mut keys: u8 = 0;
+
+        self.dio.make_push_pull_output();
+        self.stb.set_high();
+        cortex_m::asm::delay(DISPLAY_DELAY);
 
 
+        for i in 0..4{
+            if data_bytes[i] & 0x04 != 0 {
+                keys |= 0x01 << (i * 2);
+            }
+            if data_bytes[i] & 0x40 != 0 {
+                keys |= 0x01 << ((i * 2) + 1);
+            }
+        }
+
+        keys
+
+    }
+
+    pub fn get_key_events(& mut self) -> Option<KeyEvent> {
+
+        let key_data = self.read_buttons();
+        if self.key_status == key_data{
+            return None;
+        }
+
+        let diff = self.key_status ^ key_data;
+        if count_bits_high(diff) > 1 {
+            return Some(KeyEvent::KeyErr);
+        }
+
+        self.key_status = key_data;
+
+        if diff & key_data != 0 {
+            return Some(KeyEvent::KeyDown { key: find_first_high(diff) });
+        }
+
+        Some(KeyEvent::KeyUp { key: find_first_high(diff) })
+    }
+
+}
+
+fn count_bits_high(value: u8) -> u8 {
+    let mut count = 0;
+    for i in 0..8 {
+        if value & (1 << i) != 0 {
+            count += 1;
+        }
+    }
+    count
+}
+
+fn find_first_high(key_data: u8) -> u8 {
+
+    for i in 0..8 {
+        if key_data & (1 << i) != 0 {
+            return i;
+        }
+    };
+
+    0
 }

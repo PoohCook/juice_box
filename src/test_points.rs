@@ -1,5 +1,39 @@
 use stm32f4xx_hal::gpio::*;
 
+#[macro_export]
+macro_rules! reset {
+    ($test_point:expr, $tp_num:expr) => {
+        match $tp_num {
+            1 => $test_point.tp1.set_high(),
+            2 => $test_point.tp2.set_high(),
+            3 => $test_point.tp3.set_high(),
+            4 => $test_point.tp4.set_high(),
+            5 => $test_point.tp5.set_high(),
+            6 => $test_point.tp6.set_high(),
+            7 => $test_point.tp7.set_high(),
+            8 => $test_point.tp8.set_high(),
+            _ => {} // Handle invalid test point number
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! set {
+    ($test_point:expr, $tp_num:expr) => {
+        match $tp_num {
+            1 => $test_point.tp1.set_low(),
+            2 => $test_point.tp2.set_low(),
+            3 => $test_point.tp3.set_low(),
+            4 => $test_point.tp4.set_low(),
+            5 => $test_point.tp5.set_low(),
+            6 => $test_point.tp6.set_low(),
+            7 => $test_point.tp7.set_low(),
+            8 => $test_point.tp8.set_low(),
+            _ => {} // Handle invalid test point number
+        }
+    };
+}
+
 pub struct TestPoints {
     pub tp1: Pin<'C', 0, Output<PushPull>>,
     pub tp2: Pin<'C', 1, Output<PushPull>>,
@@ -46,39 +80,17 @@ impl TestPoints {
 
     }
 
-}
+    pub fn write_value(&mut self, val: u8){
+        self.reset_all();
 
-
-#[macro_export]
-macro_rules! reset {
-    ($test_point:expr, $tp_num:expr) => {
-        match $tp_num {
-            1 => $test_point.tp1.set_high(),
-            2 => $test_point.tp2.set_high(),
-            3 => $test_point.tp3.set_high(),
-            4 => $test_point.tp4.set_high(),
-            5 => $test_point.tp5.set_high(),
-            6 => $test_point.tp6.set_high(),
-            7 => $test_point.tp7.set_high(),
-            8 => $test_point.tp8.set_high(),
-            _ => {} // Handle invalid test point number
+        for i in 0..8 {
+            let mask = 0x01 << i;
+            if val & mask != 0 {
+                set!(self, i+1)
+            }
         }
-    };
-}
+    }
 
-#[macro_export]
-macro_rules! set {
-    ($test_point:expr, $tp_num:expr) => {
-        match $tp_num {
-            1 => $test_point.tp1.set_low(),
-            2 => $test_point.tp2.set_low(),
-            3 => $test_point.tp3.set_low(),
-            4 => $test_point.tp4.set_low(),
-            5 => $test_point.tp5.set_low(),
-            6 => $test_point.tp6.set_low(),
-            7 => $test_point.tp7.set_low(),
-            8 => $test_point.tp8.set_low(),
-            _ => {} // Handle invalid test point number
-        }
-    };
+
+
 }

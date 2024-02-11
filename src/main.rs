@@ -7,7 +7,7 @@ use panic_halt as _;
 
 use cortex_m_rt::entry;
 use stm32f4xx_hal::{
-    gpio::*, pac, prelude::*
+    gpio::*, pac, prelude::*, rtc::Event
 };
 
 mod test_points;
@@ -53,22 +53,40 @@ fn main() -> ! {
     );
 
     display.initialize(7);
+    display.set_brightness(7);
+    display.display_num(1, 1);
+    display.display_num(2, 2);
+    display.display_num(3, 3);
+    display.display_num(4, 4);
+
 
     let mut cur_count = 0;
 
+    let mut butts: u8 = 0;
+
     loop {
-
-        display.display_num(1, cur_count);
-        display.display_num(2, cur_count+20);
-        display.display_num(3, cur_count+40);
-        display.display_num(4, cur_count+80);
-
-        // display.set_brightness(cur_count % 8);
-
         cur_count += 1;
         if cur_count > 99 {
             cur_count = 0;
         }
-        cortex_m::asm::delay(8_000_000);
+
+        // let butts = display.read_buttons();
+        let key_event = display.get_key_events();
+
+        match key_event {
+            Some(ev) => {
+                match ev {
+                    KeyEvent::KeyDown { key } => {
+                        butts ^= 0x01 << key;
+                    },
+                    _ => {}
+                }
+            }
+            None => {}
+        }
+
+        test_point.write_value(butts);
+
+        cortex_m::asm::delay(800);
 
     }}
