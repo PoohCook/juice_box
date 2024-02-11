@@ -11,16 +11,26 @@ pub struct TestPoints {
     pub tp8: Pin<'C', 7, Output<PushPull>>,
 }
 impl TestPoints {
-    pub fn new(parts: gpioc::Parts) -> Self {
+    pub fn new(
+        pc0: Pin<'C', 0>,
+        pc1: Pin<'C', 1>,
+        pc2: Pin<'C', 2>,
+        pc3: Pin<'C', 3>,
+        pc4: Pin<'C', 4>,
+        pc5: Pin<'C', 5>,
+        pc6: Pin<'C', 6>,
+        pc7: Pin<'C', 7>,
+
+    ) -> Self {
         TestPoints{
-            tp1: parts.pc0.into_push_pull_output(),
-            tp2: parts.pc1.into_push_pull_output(),
-            tp3: parts.pc2.into_push_pull_output(),
-            tp4: parts.pc3.into_push_pull_output(),
-            tp5: parts.pc4.into_push_pull_output(),
-            tp6: parts.pc5.into_push_pull_output(),
-            tp7: parts.pc6.into_push_pull_output(),
-            tp8: parts.pc7.into_push_pull_output(),
+            tp1: pc0.into_push_pull_output(),
+            tp2: pc1.into_push_pull_output(),
+            tp3: pc2.into_push_pull_output(),
+            tp4: pc3.into_push_pull_output(),
+            tp5: pc4.into_push_pull_output(),
+            tp6: pc5.into_push_pull_output(),
+            tp7: pc6.into_push_pull_output(),
+            tp8: pc7.into_push_pull_output(),
         }
     }
 

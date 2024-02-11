@@ -23,3 +23,8 @@ incremental = false
 debug = true
 lto = true
 opt-level = "s"
+
+[[bin]]
+name = "juicy"
+test = false
+bench = false
