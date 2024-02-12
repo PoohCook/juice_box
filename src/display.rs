@@ -243,7 +243,7 @@ fn find_first_high(key_data: u8) -> u8 {
 
     for i in 0..8 {
         if key_data & (1 << i) != 0 {
-            return i;
+            return i+1;
         }
     };
 
