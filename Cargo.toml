@@ -5,9 +5,15 @@ authors = ["PoohCook <PoohCook@gmail.com>"]
 edition = "2021"
 
 [dependencies]
+embedded-hal = "1.0.0"
+nb = "1"
 cortex-m = "0.7"
-cortex-m-rt = "0.7"
+cortex-m-rt = "0.7.0"
+# Panic behaviour, see https://crates.io/keywords/panic-impl for alternatives
 panic-halt = "0.2.0"
+
+smart-leds = "0.3.0"
+ws2812-spi = "0.4.0"
 
 [dependencies.stm32f4xx-hal]
 version = "0.20.0"
@@ -28,3 +34,6 @@ opt-level = "s"
 name = "juicy"
 test = false
 bench = false
+
+[features]
+mosi_idle_high = []

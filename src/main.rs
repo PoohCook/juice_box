@@ -1,14 +1,22 @@
-#![deny(unsafe_code)]
 #![no_main]
 #![no_std]
 
 // Halt on panic
-use panic_halt as _;
+use panic_halt as _; // panic handler
 
 use cortex_m_rt::entry;
-use stm32f4xx_hal::{
-    gpio::*, pac, prelude::*
-};
+use stm32f4xx_hal as hal;
+
+use ws2812_spi as ws2812;
+
+// use crate::hal::delay::Delay;
+use crate::hal::pac;
+use crate::hal::gpio::NoPin;
+use crate::hal::prelude::*;
+use crate::hal::spi::Spi;
+use crate::ws2812::Ws2812;
+
+use smart_leds::{gamma, SmartLedsWrite, RGB8, hsv::Hsv, hsv::hsv2rgb};
 
 mod test_points;
 use test_points::{*};
@@ -17,16 +25,16 @@ mod display;
 use display::*;
 
 
-#[allow(clippy::empty_loop)]
 #[entry]
 fn main() -> ! {
     // Acquire the device peripherals
     let dp = pac::Peripherals::take().unwrap();
 
     // Configure the RCC (Reset and Clock Control) peripheral to enable GPIOA
-    let _ = dp.RCC.constrain();
+    let rcc = dp.RCC.constrain();
+    let clocks = rcc.cfgr.sysclk(8.MHz()).freeze();
 
-    // let gpioa = dp.GPIOA.split();
+    let gpioa = dp.GPIOA.split();
     // let gpiob = dp.GPIOB.split();
     let gpioc = dp.GPIOC.split();
     // let gpiod = dp.GPIOD.split();
@@ -59,7 +67,27 @@ fn main() -> ! {
     display.display_num(3, 0);
     display.display_num(4, 0);
 
+    set!(test_point, 1);
 
+    // Configure pins for SPI
+    let sck1 = gpioa.pa5.into_alternate();
+    let miso1 = NoPin::new();                          // miso not needed
+    let mosi1 = gpioa.pa7.into_alternate();     // PA7 is output going to data line of leds
+
+    set!(test_point, 2);
+    // SPI1 with 3Mhz
+    let spi = Spi::new(dp.SPI1, (sck1, miso1, mosi1), ws2812::MODE, 3_000_000.Hz(), &clocks);
+
+    cortex_m::asm::delay(8000);
+    let mut ws = Ws2812::new(spi);
+    cortex_m::asm::delay(8000);
+
+    set!(test_point, 3);
+    const LED_NUM: usize = 8;
+    let mut data = [RGB8::new(0x7f, 0x00, 0x00); LED_NUM];
+    // before writing, apply gamma correction for nicer rainbow
+
+    set!(test_point, 4);
     let mut cur_count = 0;
 
     let mut butts = [0,0,0,0];
@@ -70,6 +98,11 @@ fn main() -> ! {
             cur_count = 0;
         }
 
+        set!(test_point, 5);
+        ws.write(data.iter().cloned());
+
+        test_point.reset_all();
+        set!(test_point, 6);
         // let butts = display.read_buttons();
         let key_event = display.get_key_events();
 
