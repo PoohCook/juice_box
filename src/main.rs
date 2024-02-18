@@ -16,9 +16,9 @@ use ws2812_spi as ws2812;
 
 // use crate::hal::delay::Delay;
 use crate::hal::pac;
-use crate::hal::gpio::NoPin;
+use crate::hal::gpio::{NoPin, Pin};
 use crate::hal::prelude::*;
-use crate::hal::spi::Spi;
+use crate::hal::spi::{Spi};
 // use crate::ws2812::Ws2812;
 use crate::ws2812::prerendered::Ws2812;
 
@@ -33,16 +33,41 @@ use display::*;
 
 
 struct LightPorts<'a> {
-    led_data: &'a mut [RGB8; 20]
+    led_data: [RGB8; 20],
+    ws: Ws2812<'a, Spi<pac::SPI1>>,
 }
 
-impl <'a>LightPorts<'a> {
+impl <'a> LightPorts<'a> {
+    fn new(
+        pa5: Pin<'A', 5>,
+        pa7: Pin<'A', 7>,
+        spi: pac::SPI1,
+        buffer: &'a mut [u8; (20 * 12) + 30],
+        clocks: &hal::rcc::Clocks,
+    ) -> Self {
+        // SPI1 with 3Mhz
+        let spi: Spi<pac::SPI1> = Spi::new(
+            spi,
+            (pa5.into_alternate(), NoPin::new(), pa7.into_alternate()),
+            ws2812::MODE,
+            3_000_000.Hz(),
+            clocks,
+        );
 
-    fn new(buffer: &'a mut [RGB8; 20]) -> Self{
-        Self { led_data: buffer }
+        const LED_NUM: usize = 20;
+        let data = [RGB8::new(0x00, 0x00, 0x00); LED_NUM];
+
+        // Create Ws2812 instance with the mutable reference to the buffer
+        let ws = Ws2812::new(spi, buffer);
+
+        // Return the LightPorts instance
+        Self {
+            led_data: data,
+            ws
+        }
     }
 
-    fn get_iter(&'a mut self) -> core::slice::Iter<'a, RGB8> {
+    fn get_iter(&mut self) -> core::slice::Iter<'_, RGB8> {
         self.led_data.iter()
     }
 
@@ -71,6 +96,12 @@ impl <'a>LightPorts<'a> {
         Ok(())
     }
 
+    fn refresh(&mut self) {
+        let res = self.ws.write(self.led_data.iter().cloned());
+        rprintln!("result: {:?}", res);
+
+    }
+
 }
 
 #[entry]
@@ -82,7 +113,7 @@ fn main() -> ! {
 
     // Configure the RCC (Reset and Clock Control) peripheral to enable GPIOA
     let rcc = dp.RCC.constrain();
-    let clocks = rcc.cfgr.sysclk(48.MHz()).freeze();
+    let clocks: hal::rcc::Clocks = rcc.cfgr.sysclk(48.MHz()).freeze();
 
     let gpioa = dp.GPIOA.split();
     // let gpiob = dp.GPIOB.split();
@@ -117,38 +148,13 @@ fn main() -> ! {
     display.display_num(3, 0);
     display.display_num(4, 0);
 
-    set!(test_point, 1);
-
-    // Configure pins for SPI
-    let sck1 = gpioa.pa5.into_alternate();
-    let miso1 = NoPin::new();                          // miso not needed
-    let mosi1 = gpioa.pa7.into_alternate();     // PA7 is output going to data line of leds
-
-    set!(test_point, 2);
-    // SPI1 with 3Mhz
-    let spi: Spi<pac::SPI1> = Spi::new(dp.SPI1, (sck1, miso1, mosi1), ws2812::MODE, 3_000_000.Hz(), &clocks);
-    // Initialize DMA peripheral
-    // let dma2_streams = dma::StreamsTuple::new(dp.DMA2);
-    // let mut spi_tx = dma2_streams.3;
-
-
-    const LED_NUM: usize = 20;
-    let mut data = [RGB8::new(0x00, 0x00, 0x00); LED_NUM];
-    let mut lights = LightPorts::new(& mut data);
-    let mut buffer = [0 as u8; (LED_NUM * 12) + 30 ];
-
-    let mut ws = Ws2812::new(spi, &mut buffer);
-
+    let mut buffer = [0u8; (20 * 12) + 30];
+    let mut lights = LightPorts::new(gpioa.pa5, gpioa.pa7, dp.SPI1, &mut buffer, &clocks);
 
     set!(test_point, 4);
     let mut cur_count = 0;
 
     let mut butts = [0,0,0,0];
-
-    // lights.set_bar(0, RGB8::new(0x7f, 0x00, 0x00));
-    // lights.set_bar(1, RGB8::new(0x7f, 0x7f, 0x00));
-    // lights.set_bar(2, RGB8::new(0x00, 0x7f, 0x00));
-    // lights.set_bar(3, RGB8::new(0x00, 0x00, 0x7f));
 
     let colors = [
         RGB8::new(0x00, 0x00, 0x00),
@@ -168,8 +174,7 @@ fn main() -> ! {
         }
 
         set!(test_point, 5);
-        let res = ws.write(lights.led_data.iter().cloned());
-        rprintln!("result: {:?}", res);
+        lights.refresh();
 
         test_point.reset_all();
         set!(test_point, 6);
