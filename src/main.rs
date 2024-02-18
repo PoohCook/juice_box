@@ -12,17 +12,12 @@ use panic_halt as _; // panic handler
 use cortex_m_rt::entry;
 use stm32f4xx_hal as hal;
 
+use crate::hal::pac;
+use crate::hal::prelude::*;
 use ws2812_spi as ws2812;
 
-// use crate::hal::delay::Delay;
-use crate::hal::pac;
-use crate::hal::gpio::{NoPin, Pin};
-use crate::hal::prelude::*;
-use crate::hal::spi::{Spi};
-// use crate::ws2812::Ws2812;
-use crate::ws2812::prerendered::Ws2812;
 
-use smart_leds::{gamma, SmartLedsWrite, RGB8, hsv::Hsv, hsv::hsv2rgb};
+use smart_leds::RGB8;
 use rtt_target::{rprintln, rtt_init_print};
 
 mod test_points;
@@ -31,78 +26,9 @@ use test_points::{*};
 mod display;
 use display::*;
 
+mod light_ports;
+use light_ports::*;
 
-struct LightPorts<'a> {
-    led_data: [RGB8; 20],
-    ws: Ws2812<'a, Spi<pac::SPI1>>,
-}
-
-impl <'a> LightPorts<'a> {
-    fn new(
-        pa5: Pin<'A', 5>,
-        pa7: Pin<'A', 7>,
-        spi: pac::SPI1,
-        buffer: &'a mut [u8; (20 * 12) + 30],
-        clocks: &hal::rcc::Clocks,
-    ) -> Self {
-        // SPI1 with 3Mhz
-        let spi: Spi<pac::SPI1> = Spi::new(
-            spi,
-            (pa5.into_alternate(), NoPin::new(), pa7.into_alternate()),
-            ws2812::MODE,
-            3_000_000.Hz(),
-            clocks,
-        );
-
-        const LED_NUM: usize = 20;
-        let data = [RGB8::new(0x00, 0x00, 0x00); LED_NUM];
-
-        // Create Ws2812 instance with the mutable reference to the buffer
-        let ws = Ws2812::new(spi, buffer);
-
-        // Return the LightPorts instance
-        Self {
-            led_data: data,
-            ws
-        }
-    }
-
-    fn get_iter(&mut self) -> core::slice::Iter<'_, RGB8> {
-        self.led_data.iter()
-    }
-
-    fn set_bar(&mut self, bar: usize, color: RGB8) -> Result<(), &'static str>{
-        if bar >= 4 {
-            return Err("bar index out of range")
-        }
-
-        let mut index = bar * 3;
-        for i in 0..3 {
-            self.led_data[index + i] = color;
-        }
-
-        Ok(())
-    }
-
-    fn set_button(&mut self, bar: usize, button: usize, color: RGB8) -> Result<(), &'static str>{
-        if bar >= 4 {
-            return Err("bar index out of range")
-        }
-
-        let mut index = (bar * 2) + button + 12;
-        self.led_data[index] = color;
-
-
-        Ok(())
-    }
-
-    fn refresh(&mut self) {
-        let res = self.ws.write(self.led_data.iter().cloned());
-        rprintln!("result: {:?}", res);
-
-    }
-
-}
 
 #[entry]
 fn main() -> ! {
@@ -174,7 +100,8 @@ fn main() -> ! {
         }
 
         set!(test_point, 5);
-        lights.refresh();
+        let res = lights.refresh();
+        rprintln!("{:?}", res);
 
         test_point.reset_all();
         set!(test_point, 6);
