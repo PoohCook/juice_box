@@ -37,5 +37,19 @@
             //"speed": 24000, //!MODIFY (or remove)
             //"probe": "VID:PID:<Serial>", //!MODIFY (or remove)
         },
+        {
+            "type": "cortex-debug",
+            "request": "launch",
+            "servertype": "openocd",
+            "cwd": "${workspaceRoot}",
+            "executable": "./target/thumbv7em-none-eabihf/debug/juicebox",
+            "name": "Debug (OpenOCD)",
+            "device": "STM32F405RGTx",
+            "configFiles": [
+                "interface/stlink-v2-1.cfg",
+                "target/stm32f3x.cfg"
+            ],
+            "runToMain": true
+        }
     ]
 }

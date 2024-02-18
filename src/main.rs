@@ -1,3 +1,8 @@
+
+
+
+
+
 #![no_main]
 #![no_std]
 
@@ -14,9 +19,11 @@ use crate::hal::pac;
 use crate::hal::gpio::NoPin;
 use crate::hal::prelude::*;
 use crate::hal::spi::Spi;
-use crate::ws2812::Ws2812;
+// use crate::ws2812::Ws2812;
+use crate::ws2812::prerendered::Ws2812;
 
 use smart_leds::{gamma, SmartLedsWrite, RGB8, hsv::Hsv, hsv::hsv2rgb};
+use rtt_target::{rprintln, rtt_init_print};
 
 mod test_points;
 use test_points::{*};
@@ -25,14 +32,45 @@ mod display;
 use display::*;
 
 
+struct LightPorts<'a> {
+    led_data: &'a mut [RGB8; 20]
+}
+
+impl <'a>LightPorts<'a> {
+
+    fn new(buffer: &'a mut [RGB8; 20]) -> Self{
+        Self { led_data: buffer }
+    }
+
+    fn get_iter(&'a mut self) -> core::slice::Iter<'a, RGB8> {
+        self.led_data.iter()
+    }
+
+    fn set_bar(&mut self, bar: usize, color: RGB8) -> Result<(), &'static str>{
+        if bar >= 4 {
+            return Err("bar index out of range")
+        }
+
+        let mut index = bar * 3;
+        for i in 0..3 {
+            self.led_data[index + i] = color;
+        }
+
+        Ok(())
+    }
+
+}
+
 #[entry]
 fn main() -> ! {
+    rtt_init_print!();
+
     // Acquire the device peripherals
     let dp = pac::Peripherals::take().unwrap();
 
     // Configure the RCC (Reset and Clock Control) peripheral to enable GPIOA
     let rcc = dp.RCC.constrain();
-    let clocks = rcc.cfgr.sysclk(8.MHz()).freeze();
+    let clocks = rcc.cfgr.sysclk(48.MHz()).freeze();
 
     let gpioa = dp.GPIOA.split();
     // let gpiob = dp.GPIOB.split();
@@ -76,21 +114,40 @@ fn main() -> ! {
 
     set!(test_point, 2);
     // SPI1 with 3Mhz
-    let spi = Spi::new(dp.SPI1, (sck1, miso1, mosi1), ws2812::MODE, 3_000_000.Hz(), &clocks);
+    let spi: Spi<pac::SPI1> = Spi::new(dp.SPI1, (sck1, miso1, mosi1), ws2812::MODE, 3_000_000.Hz(), &clocks);
+    // Initialize DMA peripheral
+    // let dma2_streams = dma::StreamsTuple::new(dp.DMA2);
+    // let mut spi_tx = dma2_streams.3;
 
-    cortex_m::asm::delay(8000);
-    let mut ws = Ws2812::new(spi);
-    cortex_m::asm::delay(8000);
 
-    set!(test_point, 3);
-    const LED_NUM: usize = 8;
-    let mut data = [RGB8::new(0x7f, 0x00, 0x00); LED_NUM];
-    // before writing, apply gamma correction for nicer rainbow
+    const LED_NUM: usize = 20;
+    let mut data = [RGB8::new(0x00, 0x00, 0x00); LED_NUM];
+    let mut lights = LightPorts::new(& mut data);
+    let mut buffer = [0 as u8; (LED_NUM * 12) + 30 ];
+
+    let mut ws = Ws2812::new(spi, &mut buffer);
+
 
     set!(test_point, 4);
     let mut cur_count = 0;
 
     let mut butts = [0,0,0,0];
+
+    // lights.set_bar(0, RGB8::new(0x7f, 0x00, 0x00));
+    // lights.set_bar(1, RGB8::new(0x7f, 0x7f, 0x00));
+    // lights.set_bar(2, RGB8::new(0x00, 0x7f, 0x00));
+    // lights.set_bar(3, RGB8::new(0x00, 0x00, 0x7f));
+
+    let colors = [
+        RGB8::new(0x00, 0x00, 0x00),
+        RGB8::new(0x3f, 0x00, 0x00),
+        RGB8::new(0x3f, 0x3f, 0x00),
+        RGB8::new(0x00, 0x3f, 0x00),
+        RGB8::new(0x00, 0x3f, 0x3f),
+        RGB8::new(0x00, 0x00, 0x3f),
+        RGB8::new(0x3f, 0x00, 0x3f),
+        RGB8::new(0x3f, 0x3f, 0x3f),
+    ];
 
     loop {
         cur_count += 1;
@@ -99,7 +156,8 @@ fn main() -> ! {
         }
 
         set!(test_point, 5);
-        ws.write(data.iter().cloned());
+        let res = ws.write(lights.led_data.iter().cloned());
+        rprintln!("result: {:?}", res);
 
         test_point.reset_all();
         set!(test_point, 6);
@@ -112,18 +170,22 @@ fn main() -> ! {
                     KeyEvent::KeyDown { key: 1 } => {
                         butts[0] += 1;
                         display.display_num(1, butts[0]);
+                        lights.set_bar(0, colors[(butts[0]%8) as usize]).unwrap();
                     },
                     KeyEvent::KeyDown { key: 3 } => {
                         butts[1] += 1;
                         display.display_num(2, butts[1]);
+                        lights.set_bar(1, colors[(butts[1]%8) as usize]).unwrap();
                     },
                     KeyEvent::KeyDown { key: 5 } => {
                         butts[2] += 1;
                         display.display_num(3, butts[2]);
+                        lights.set_bar(2, colors[(butts[2]%8) as usize]).unwrap();
                     },
                     KeyEvent::KeyDown { key: 7 } => {
                         butts[3] += 1;
                         display.display_num(4, butts[3]);
+                        lights.set_bar(3, colors[(butts[3]%8) as usize]).unwrap();
                     },
                     _ => {}
                 }
@@ -131,6 +193,6 @@ fn main() -> ! {
             None => {}
         }
 
-        cortex_m::asm::delay(800);
+        cortex_m::asm::delay(1_000_000);
 
     }}
