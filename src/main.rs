@@ -59,6 +59,18 @@ impl <'a>LightPorts<'a> {
         Ok(())
     }
 
+    fn set_button(&mut self, bar: usize, button: usize, color: RGB8) -> Result<(), &'static str>{
+        if bar >= 4 {
+            return Err("bar index out of range")
+        }
+
+        let mut index = (bar * 2) + button + 12;
+        self.led_data[index] = color;
+
+
+        Ok(())
+    }
+
 }
 
 #[entry]
@@ -171,21 +183,61 @@ fn main() -> ! {
                         butts[0] += 1;
                         display.display_num(1, butts[0]);
                         lights.set_bar(0, colors[(butts[0]%8) as usize]).unwrap();
+                        lights.set_button(0, 0, colors[3]).unwrap();
                     },
                     KeyEvent::KeyDown { key: 3 } => {
                         butts[1] += 1;
                         display.display_num(2, butts[1]);
                         lights.set_bar(1, colors[(butts[1]%8) as usize]).unwrap();
+                        lights.set_button(1, 0, colors[3]).unwrap();
                     },
                     KeyEvent::KeyDown { key: 5 } => {
                         butts[2] += 1;
                         display.display_num(3, butts[2]);
                         lights.set_bar(2, colors[(butts[2]%8) as usize]).unwrap();
+                        lights.set_button(2, 0, colors[3]).unwrap();
                     },
                     KeyEvent::KeyDown { key: 7 } => {
                         butts[3] += 1;
                         display.display_num(4, butts[3]);
                         lights.set_bar(3, colors[(butts[3]%8) as usize]).unwrap();
+                        lights.set_button(3, 0, colors[3]).unwrap();
+                    },
+                    KeyEvent::KeyDown { key: 2 } => {
+                        lights.set_button(0, 1, colors[5]).unwrap();
+                    },
+                    KeyEvent::KeyDown { key: 4 } => {
+                        lights.set_button(1, 1, colors[5]).unwrap();
+                    },
+                    KeyEvent::KeyDown { key: 6 } => {
+                        lights.set_button(2, 1, colors[5]).unwrap();
+                    },
+                    KeyEvent::KeyDown { key: 8 } => {
+                        lights.set_button(3, 1, colors[5]).unwrap();
+                    },
+                    KeyEvent::KeyUp { key: 1 } => {
+                        lights.set_button(0, 0, colors[0]).unwrap();
+                    },
+                    KeyEvent::KeyUp { key: 2 } => {
+                        lights.set_button(0, 1, colors[0]).unwrap();
+                    },
+                    KeyEvent::KeyUp { key: 3 } => {
+                        lights.set_button(1, 0, colors[0]).unwrap();
+                    },
+                    KeyEvent::KeyUp { key: 4 } => {
+                        lights.set_button(1, 1, colors[0]).unwrap();
+                    },
+                    KeyEvent::KeyUp { key: 5 } => {
+                        lights.set_button(2, 0, colors[0]).unwrap();
+                    },
+                    KeyEvent::KeyUp { key: 6 } => {
+                        lights.set_button(2, 1, colors[0]).unwrap();
+                    },
+                    KeyEvent::KeyUp { key: 7 } => {
+                        lights.set_button(3, 0, colors[0]).unwrap();
+                    },
+                    KeyEvent::KeyUp { key: 8 } => {
+                        lights.set_button(3, 1, colors[0]).unwrap();
                     },
                     _ => {}
                 }
