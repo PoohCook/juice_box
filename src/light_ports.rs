@@ -21,17 +21,6 @@ use smart_leds::{SmartLedsWrite, RGB8};
 pub const LED_NUM: usize = 20;
 const BLINK_MSEC: u32 = 500;
 
-pub const COLORS: [RGB8; 8] = [
-        RGB8::new(0x00, 0x00, 0x00),
-        RGB8::new(0x3f, 0x00, 0x00),
-        RGB8::new(0x3f, 0x3f, 0x00),
-        RGB8::new(0x00, 0x3f, 0x00),
-        RGB8::new(0x00, 0x3f, 0x3f),
-        RGB8::new(0x00, 0x00, 0x3f),
-        RGB8::new(0x3f, 0x00, 0x3f),
-        RGB8::new(0x3f, 0x3f, 0x3f),
-    ];
-
 pub struct LightPorts<'a> {
     led_data: [RGB8; LED_NUM],
     blink_mask: [bool; LED_NUM],
@@ -107,13 +96,19 @@ impl <'a> LightPorts<'a> {
         Ok(())
     }
 
-    pub fn refresh(&mut self)  {
+    pub fn refresh(&mut self, updated: bool)  {
 
+        let mut updated = updated;
         if self.sys_timer.now() > self.blink_next {
             self.blink_next = self.get_next_blink();
             self.blink_on ^= true;
+            updated = true;
         }
 
+        if !updated {
+            return;
+        }
+        
         let mut current_leds = self.led_data.clone();
         if self.blink_on == false {
             for i in 0..LED_NUM {

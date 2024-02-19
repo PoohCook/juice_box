@@ -34,6 +34,7 @@ macro_rules! set {
     };
 }
 
+#[allow(dead_code)]
 pub struct TestPoints {
     pub tp1: Pin<'C', 0, Output<PushPull>>,
     pub tp2: Pin<'C', 1, Output<PushPull>>,
@@ -80,6 +81,7 @@ impl TestPoints {
 
     }
 
+    #[allow(dead_code)]
     pub fn write_value(&mut self, val: u8){
         self.reset_all();
 

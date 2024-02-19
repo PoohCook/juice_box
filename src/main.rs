@@ -20,7 +20,8 @@ use crate::hal::timer::Counter;
 use ws2812_spi as ws2812;
 
 
-use rtt_target::{rprintln, rtt_init_print};
+// use rtt_target::rprintln;
+use rtt_target::rtt_init_print;
 
 mod test_points;
 use test_points::{*};
@@ -30,6 +31,9 @@ use ev_charger::*;
 
 mod display;
 use display::*;
+
+mod pallet;
+use pallet::Colors;
 
 mod light_ports;
 use light_ports::*;
@@ -41,7 +45,6 @@ fn main() -> ! {
 
     // Acquire the device peripherals
     let dp = pac::Peripherals::take().unwrap();
-    let cp = cortex_m::Peripherals::take().unwrap();
 
     // Configure the RCC (Reset and Clock Control) peripheral to enable GPIOA
     let rcc = dp.RCC.constrain();
@@ -80,11 +83,14 @@ fn main() -> ! {
 
 
     loop {
+        let mut updated = false;
         for chrg in &mut chargers {
-            chrg.refresh_ui(&mut display, &mut lights);
+            if chrg.refresh_ui(&mut display, &mut lights) {
+                updated = true;
+            }
         }
 
-        lights.refresh();
+        lights.refresh( updated);
 
 
         test_point.reset_all();
