@@ -12,6 +12,17 @@ use crate::ws2812::prerendered::Ws2812;
 use smart_leds::{SmartLedsWrite, RGB8};
 // use rtt_target::{rprintln, rtt_init_print};
 
+pub const COLORS: [RGB8; 8] = [
+        RGB8::new(0x00, 0x00, 0x00),
+        RGB8::new(0x3f, 0x00, 0x00),
+        RGB8::new(0x3f, 0x3f, 0x00),
+        RGB8::new(0x00, 0x3f, 0x00),
+        RGB8::new(0x00, 0x3f, 0x3f),
+        RGB8::new(0x00, 0x00, 0x3f),
+        RGB8::new(0x3f, 0x00, 0x3f),
+        RGB8::new(0x3f, 0x3f, 0x3f),
+    ];
+
 pub struct LightPorts<'a> {
     led_data: [RGB8; 20],
     ws: Ws2812<'a, Spi<SPI1>>,
@@ -47,12 +58,13 @@ impl <'a> LightPorts<'a> {
         }
     }
 
-    pub fn set_bar(&mut self, bar: usize, color: RGB8) -> Result<(), &'static str>{
-        if bar >= 4 {
+    pub fn set_bar(&mut self, bank: u8, color: RGB8) -> Result<(), &'static str>{
+        let bank = bank as usize;
+        if bank >= 4 {
             return Err("bar index out of range")
         }
 
-        let index = bar * 3;
+        let index = bank * 3;
         for i in 0..3 {
             self.led_data[index + i] = color;
         }
@@ -60,12 +72,13 @@ impl <'a> LightPorts<'a> {
         Ok(())
     }
 
-    pub fn set_button(&mut self, bar: usize, button: usize, color: RGB8) -> Result<(), &'static str>{
-        if bar >= 4 {
+    pub fn set_button(&mut self, bank: u8, button: usize, color: RGB8) -> Result<(), &'static str>{
+        let bank = bank as usize;
+        if bank >= 4 {
             return Err("bar index out of range")
         }
 
-        let index = (bar * 2) + button + 12;
+        let index = (bank * 2) + button + 12;
         self.led_data[index] = color;
 
         Ok(())

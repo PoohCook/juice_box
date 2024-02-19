@@ -123,16 +123,16 @@ impl TM1638 {
     fn update_buffer(&mut self, bank: u8, disp: &[u8; 2]){
 
         match bank {
-            1 => {
+            0 => {
                 self.disp_buffer[0..0 + disp.len()].copy_from_slice(disp);
             },
-            2 => {
+            1 => {
                 self.disp_buffer[2..2 + disp.len()].copy_from_slice(disp);
             },
-            3 => {
+            2 => {
                 self.disp_buffer[4..4 + disp.len()].copy_from_slice(disp);
             },
-            4 => {
+            3 => {
                 self.disp_buffer[6..6 + disp.len()].copy_from_slice(disp);
             },
             _ => {}
