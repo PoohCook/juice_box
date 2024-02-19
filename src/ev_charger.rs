@@ -11,6 +11,7 @@ pub struct EVCharger {
     aux_key: u8,
     key_colors: [RGB8; 2],
     bank_color: RGB8,
+    bank_blink: bool
 }
 
 impl EVCharger {
@@ -24,12 +25,15 @@ impl EVCharger {
             aux_key: (ui_bank * 2) + 2,
             key_colors: [RGB8::default(), RGB8::default()],
             bank_color: COLORS[3],
+            bank_blink: false,
         }
     }
 
     pub fn on_key_event(&mut self, event: &KeyEvent) {
         match event {
             KeyEvent::KeyDown { key } if *key == self.service_key => {
+                self.bank_color = COLORS[2];
+                self.bank_blink = true;
                 self.key_colors[0] = COLORS[6];
                 self.update = true;
             },
@@ -53,9 +57,9 @@ impl EVCharger {
     pub fn refresh_ui(&mut self, display: &mut TM1638, light_ports: &mut LightPorts) {
         if self.update{
             display.display_num(self.ui_bank, self.unit_id);
-            light_ports.set_bar(self.ui_bank, self.bank_color).unwrap();
+            light_ports.set_bar(self.ui_bank, self.bank_color, self.bank_blink).unwrap();
             for i in 0..2{
-                light_ports.set_button(self.ui_bank, i, self.key_colors[i]).unwrap();
+                light_ports.set_button(self.ui_bank, i, self.key_colors[i], false).unwrap();
             }
             self.update = false;
         }

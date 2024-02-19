@@ -179,6 +179,7 @@ dependencies = [
  "cortex-m",
  "cortex-m-rt",
  "embedded-hal 1.0.0",
+ "fugit",
  "nb 1.1.0",
  "panic-halt",
  "rtt-target",

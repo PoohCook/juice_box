@@ -13,11 +13,13 @@ use cortex_m_rt::entry;
 use stm32f4xx_hal as hal;
 
 use crate::hal::pac;
+use crate::hal::pac::TIM2;
 use crate::hal::prelude::*;
+use crate::hal::timer::Counter;
+
 use ws2812_spi as ws2812;
 
 
-use smart_leds::RGB8;
 use rtt_target::{rprintln, rtt_init_print};
 
 mod test_points;
@@ -39,10 +41,14 @@ fn main() -> ! {
 
     // Acquire the device peripherals
     let dp = pac::Peripherals::take().unwrap();
+    let cp = cortex_m::Peripherals::take().unwrap();
 
     // Configure the RCC (Reset and Clock Control) peripheral to enable GPIOA
     let rcc = dp.RCC.constrain();
     let clocks: hal::rcc::Clocks = rcc.cfgr.sysclk(48.MHz()).freeze();
+
+    let mut sys_timer:Counter<TIM2, 1000> = dp.TIM2.counter_ms(&clocks);
+    sys_timer.start(u32::MAX.millis()).unwrap();
 
     let gpioa = dp.GPIOA.split();
     // let gpiob = dp.GPIOB.split();
@@ -63,7 +69,7 @@ fn main() -> ! {
     display.set_brightness(7);
 
     let mut buffer = [0u8; (LED_NUM * 12) + 30];
-    let mut lights = LightPorts::new(gpioa.pa5, gpioa.pa7, dp.SPI1, &mut buffer, &clocks);
+    let mut lights = LightPorts::new(gpioa.pa5, gpioa.pa7, dp.SPI1, &mut buffer, &clocks, &sys_timer);
 
     let mut chargers = [
         EVCharger::new(1, 0),
@@ -72,13 +78,14 @@ fn main() -> ! {
         EVCharger::new(4, 3),
     ];
 
+
     loop {
         for chrg in &mut chargers {
             chrg.refresh_ui(&mut display, &mut lights);
         }
 
-        let res = lights.refresh();
-        rprintln!("{:?}", res);
+        lights.refresh();
+
 
         test_point.reset_all();
         set!(test_point, 6);
@@ -93,6 +100,15 @@ fn main() -> ! {
             _ => {}
         };
 
-        cortex_m::asm::delay(1_000_000);
+        // cortex_m::asm::delay(1_000_000);
+        // this si a bit mickey mouse but it hunts for now
+        let timeout = sys_timer.now() + 1.millis();
+        while sys_timer.now() < timeout {
+
+        }
+
+        // let tics = sys_timer.now();
+        // let cur = clocks.sysclk();
+        // rprintln!("clk: {:?} {:?}", cur, tics);
 
     }}
