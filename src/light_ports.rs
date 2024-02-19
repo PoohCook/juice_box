@@ -12,6 +12,8 @@ use crate::ws2812::prerendered::Ws2812;
 use smart_leds::{SmartLedsWrite, RGB8};
 // use rtt_target::{rprintln, rtt_init_print};
 
+pub const LED_NUM: usize = 20;
+
 pub const COLORS: [RGB8; 8] = [
         RGB8::new(0x00, 0x00, 0x00),
         RGB8::new(0x3f, 0x00, 0x00),
@@ -24,7 +26,7 @@ pub const COLORS: [RGB8; 8] = [
     ];
 
 pub struct LightPorts<'a> {
-    led_data: [RGB8; 20],
+    led_data: [RGB8; LED_NUM],
     ws: Ws2812<'a, Spi<SPI1>>,
 }
 
@@ -33,7 +35,7 @@ impl <'a> LightPorts<'a> {
         pa5: Pin<'A', 5>,
         pa7: Pin<'A', 7>,
         spi: SPI1,
-        buffer: &'a mut [u8; (20 * 12) + 30],
+        buffer: &'a mut [u8; (LED_NUM * 12) + 30],
         clocks: &Clocks,
     ) -> Self {
         // SPI1 with 3Mhz
@@ -45,7 +47,6 @@ impl <'a> LightPorts<'a> {
             clocks,
         );
 
-        const LED_NUM: usize = 20;
         let data = [RGB8::new(0x00, 0x00, 0x00); LED_NUM];
 
         // Create Ws2812 instance with the mutable reference to the buffer

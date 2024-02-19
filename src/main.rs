@@ -62,7 +62,7 @@ fn main() -> ! {
     display.initialize(7);
     display.set_brightness(7);
 
-    let mut buffer = [0u8; (20 * 12) + 30];
+    let mut buffer = [0u8; (LED_NUM * 12) + 30];
     let mut lights = LightPorts::new(gpioa.pa5, gpioa.pa7, dp.SPI1, &mut buffer, &clocks);
 
     let mut chargers = [
