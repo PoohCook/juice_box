@@ -14,14 +14,13 @@ use stm32f4xx_hal as hal;
 
 use crate::hal::pac;
 use crate::hal::pac::TIM2;
-use crate::hal::pac::{USART2, DMA1};
+use crate::hal::pac::USART2;
 use crate::hal::prelude::*;
 use crate::hal::timer::Counter;
 use crate::hal::serial::{config::Config, Serial};
-use crate::hal::dma;
 use crate::hal::dma::Transfer;
-use crate::hal::dma::{PeripheralToMemory, MemoryToPeripheral, Stream5, Stream6, StreamsTuple};
-use crate::hal::dma::{Channel5, Channel6, config::DmaConfig};
+use crate::hal::dma::StreamsTuple;
+use crate::hal::dma::config::DmaConfig;
 
 
 use ws2812_spi as ws2812;
@@ -45,13 +44,6 @@ use pallet::Colors;
 mod light_ports;
 use light_ports::*;
 
-
-type DmaRxTransfer =
-        Transfer<Stream5<DMA1>, 0, USART2, PeripheralToMemory, &'static mut [u8;1]>;
-
-type DmaBunny =
-    Transfer<Stream5<DMA1>, 0, USART2, PeripheralToMemory, &'static mut [u8; 2]>;
-
 #[entry]
 fn main() -> ! {
     rtt_init_print!();
@@ -74,33 +66,47 @@ fn main() -> ! {
 
     let tx = gpioa.pa2.into_alternate();
     let rx = gpioa.pa3.into_alternate();
-    let de = gpioa.pa4.into_push_pull_output();
+    let mut de = gpioa.pa4.into_push_pull_output();
+
+    de.set_high();
+
+    let ser_config = Config::default()
+    .baudrate(19200.bps())
+    .parity_none()
+    .wordlength_8()
+    .dma(hal::serial::config::DmaConfig::TxRx);
+
+    rprintln!("ser config: {:?}", ser_config);
 
     let usart2 = Serial::new(
         dp.USART2,
         (tx, rx),
-        Config::default().baudrate(19200.bps()).parity_none().wordlength_8(),
+        ser_config,
         &clocks,
     )
     .unwrap();
 
     // Split UART peripheral into transmitter and receiver
-    let (mut uart2_tx, mut uart2_rx) = usart2.split();
+    let (mut uart2_tx, uart2_rx) = usart2.split();
+
+    stm32f4xx_hal::prelude::_embedded_hal_serial_nb_Write::write(&mut uart2_tx, 0x11)
+    .unwrap();
 
     // Initialize DMA
     let dma_channels = StreamsTuple::new(dp.DMA1);
-    let mut tx_channel = dma_channels.6;
-    let mut rx_channel = dma_channels.5;
+    let _tx_channel = dma_channels.6;
+    let rx_channel = dma_channels.5;
 
     // Create buffers for sending and receiving data
-    static mut TX_BUFFER: [u8; 8] = [0; 8];
-    static mut RX_BUFFER: [u8; 8] = [0; 8];
+    const BUF_LEN: usize = 50;
+    static mut _TX_BUFFER: [u8; 8] = [0; 8];
+    static mut RX_BUFFER: [u8; BUF_LEN] = [0; BUF_LEN];
 
     let dma_config = DmaConfig::default()
     .transfer_complete_interrupt(true)
     .memory_increment(true);
 
-    rprintln!("data: {:?}", dma_config);
+    rprintln!("dma config: {:?}", dma_config);
 
     let mut rx_transfer = Transfer::init_peripheral_to_memory(
         rx_channel,
@@ -110,8 +116,7 @@ fn main() -> ! {
         dma_config,
         );
 
-
-    rx_transfer.start(|_| {unsafe{rprintln!("data: {:?}", RX_BUFFER);}});
+    rx_transfer.start(|p: &mut hal::uart::Rx<USART2>| rprintln!("data: {:?}", p.is_rx_not_empty()));
 
 
     // Configure PA5 as a digital output
@@ -136,6 +141,7 @@ fn main() -> ! {
         EVCharger::new(4, 3),
     ];
 
+    let mut last_xfs = (BUF_LEN + 1) as u16;
 
     loop {
         let mut updated = false;
@@ -162,12 +168,21 @@ fn main() -> ! {
 
         // cortex_m::asm::delay(1_000_000);
         // this si a bit mickey mouse but it hunts for now
-        let timeout = sys_timer.now() + 100.millis();
+        let timeout = sys_timer.now() + 1.millis();
         while sys_timer.now() < timeout {
 
         }
 
-        unsafe{rprintln!("beep: {:?}", RX_BUFFER)};
+        de.set_low();
+
+
+
+        let xfrs = rx_transfer.number_of_transfers();
+        if last_xfs != xfrs {
+            let dma_flags = rx_transfer.flags();
+            unsafe{rprintln!("beep: {:?} {:?} {:?}", dma_flags, xfrs, RX_BUFFER)};
+            last_xfs = xfrs;
+        }
 
         // let tics = sys_timer.now();
         // let cur = clocks.sysclk();
