@@ -44,6 +44,26 @@ use pallet::Colors;
 mod light_ports;
 use light_ports::*;
 
+fn calculate_crc16(data: &[u8]) -> u16{
+
+    let mut crc: u16 = 0xFFFF;  // Initial CRC value
+    let poly: u16 = 0xA001;  // CRC-16 polynomial
+
+    for &int_val in data {
+        crc ^= int_val as u16;
+        for _ in 0..8 {
+            if (crc & 0x0001) != 0 {
+                crc = (crc >> 1) ^ poly;
+            } else {
+                crc >>= 1;
+            }
+        }
+    }
+
+    crc
+
+}
+
 #[entry]
 fn main() -> ! {
     rtt_init_print!();
@@ -98,7 +118,7 @@ fn main() -> ! {
     let rx_channel = dma_channels.5;
 
     // Create buffers for sending and receiving data
-    const BUF_LEN: usize = 50;
+    const BUF_LEN: usize = 20;
     static mut _TX_BUFFER: [u8; 8] = [0; 8];
     static mut RX_BUFFER: [u8; BUF_LEN] = [0; BUF_LEN];
 
@@ -141,7 +161,8 @@ fn main() -> ! {
         EVCharger::new(4, 3),
     ];
 
-    let mut last_xfs = (BUF_LEN + 1) as u16;
+    let mut last_xfs = BUF_LEN as u16;
+    let mut last_rcv_to: Option<fugit::Instant<u32, 1, 1000>> = None;
 
     loop {
         let mut updated = false;
@@ -168,20 +189,32 @@ fn main() -> ! {
 
         // cortex_m::asm::delay(1_000_000);
         // this si a bit mickey mouse but it hunts for now
-        let timeout = sys_timer.now() + 1.millis();
+        let timeout: fugit::Instant<u32, 1, 1000> = sys_timer.now() + 1.millis();
         while sys_timer.now() < timeout {
 
         }
 
         de.set_low();
 
-
-
         let xfrs = rx_transfer.number_of_transfers();
         if last_xfs != xfrs {
-            let dma_flags = rx_transfer.flags();
-            unsafe{rprintln!("beep: {:?} {:?} {:?}", dma_flags, xfrs, RX_BUFFER)};
+            last_rcv_to = Some(sys_timer.now() + 3.millis());
             last_xfs = xfrs;
+        }
+
+        match last_rcv_to {
+            Some(tout) if sys_timer.now() >= tout  => {
+                let tx_size = BUF_LEN - xfrs  as usize;
+                let msg = unsafe{&RX_BUFFER[0..tx_size]};
+                let crc = calculate_crc16(msg);
+                rprintln!("beep: {:?} {:?}", crc, &msg[..tx_size-2]);
+                last_rcv_to = None;
+                last_xfs = BUF_LEN as u16;
+                unsafe{RX_BUFFER = [0; BUF_LEN]};
+                rx_transfer.next_transfer(unsafe{&mut RX_BUFFER});
+                rx_transfer.start(|_| ());
+            },
+            _ => {}
         }
 
         // let tics = sys_timer.now();
