@@ -14,17 +14,10 @@ use stm32f4xx_hal as hal;
 
 use crate::hal::pac;
 use crate::hal::pac::TIM2;
-use crate::hal::pac::USART2;
 use crate::hal::prelude::*;
 use crate::hal::timer::Counter;
-use crate::hal::serial::{config::Config, Serial};
-use crate::hal::dma::Transfer;
-use crate::hal::dma::StreamsTuple;
-use crate::hal::dma::config::DmaConfig;
-
 
 use ws2812_spi as ws2812;
-
 
 use rtt_target::rprintln;
 use rtt_target::rtt_init_print;
@@ -44,29 +37,15 @@ use pallet::Colors;
 mod light_ports;
 use light_ports::*;
 
-fn calculate_crc16(data: &[u8]) -> u16{
+mod serial;
+use serial::*;
 
-    let mut crc: u16 = 0xFFFF;  // Initial CRC value
-    let poly: u16 = 0xA001;  // CRC-16 polynomial
-
-    for &int_val in data {
-        crc ^= int_val as u16;
-        for _ in 0..8 {
-            if (crc & 0x0001) != 0 {
-                crc = (crc >> 1) ^ poly;
-            } else {
-                crc >>= 1;
-            }
-        }
-    }
-
-    crc
-
-}
 
 #[entry]
 fn main() -> ! {
     rtt_init_print!();
+
+    19200.bps();
 
     // Acquire the device peripherals
     let dp = pac::Peripherals::take().unwrap();
@@ -84,60 +63,7 @@ fn main() -> ! {
     // let gpiod = dp.GPIOD.split();
     // let gpioe = dp.GPIOE.split();
 
-    let tx = gpioa.pa2.into_alternate();
-    let rx = gpioa.pa3.into_alternate();
-    let mut de = gpioa.pa4.into_push_pull_output();
-
-    de.set_high();
-
-    let ser_config = Config::default()
-    .baudrate(19200.bps())
-    .parity_none()
-    .wordlength_8()
-    .dma(hal::serial::config::DmaConfig::TxRx);
-
-    rprintln!("ser config: {:?}", ser_config);
-
-    let usart2 = Serial::new(
-        dp.USART2,
-        (tx, rx),
-        ser_config,
-        &clocks,
-    )
-    .unwrap();
-
-    // Split UART peripheral into transmitter and receiver
-    let (mut uart2_tx, uart2_rx) = usart2.split();
-
-    stm32f4xx_hal::prelude::_embedded_hal_serial_nb_Write::write(&mut uart2_tx, 0x11)
-    .unwrap();
-
-    // Initialize DMA
-    let dma_channels = StreamsTuple::new(dp.DMA1);
-    let _tx_channel = dma_channels.6;
-    let rx_channel = dma_channels.5;
-
-    // Create buffers for sending and receiving data
-    const BUF_LEN: usize = 20;
-    static mut _TX_BUFFER: [u8; 8] = [0; 8];
-    static mut RX_BUFFER: [u8; BUF_LEN] = [0; BUF_LEN];
-
-    let dma_config = DmaConfig::default()
-    .transfer_complete_interrupt(true)
-    .memory_increment(true);
-
-    rprintln!("dma config: {:?}", dma_config);
-
-    let mut rx_transfer = Transfer::init_peripheral_to_memory(
-        rx_channel,
-        uart2_rx,
-        unsafe { &mut RX_BUFFER },
-        None,
-        dma_config,
-        );
-
-    rx_transfer.start(|p: &mut hal::uart::Rx<USART2>| rprintln!("data: {:?}", p.is_rx_not_empty()));
-
+    let mut modbus = ModbusTransceiver::new(gpioa.pa2, gpioa.pa3, gpioa.pa4, dp.USART2, dp.DMA1, &clocks, &sys_timer);
 
     // Configure PA5 as a digital output
     let mut test_point = TestPoints::new(
@@ -160,9 +86,6 @@ fn main() -> ! {
         EVCharger::new(3, 2),
         EVCharger::new(4, 3),
     ];
-
-    let mut last_xfs = BUF_LEN as u16;
-    let mut last_rcv_to: Option<fugit::Instant<u32, 1, 1000>> = None;
 
     loop {
         let mut updated = false;
@@ -194,28 +117,9 @@ fn main() -> ! {
 
         }
 
-        de.set_low();
-
-        let xfrs = rx_transfer.number_of_transfers();
-        if last_xfs != xfrs {
-            last_rcv_to = Some(sys_timer.now() + 3.millis());
-            last_xfs = xfrs;
-        }
-
-        match last_rcv_to {
-            Some(tout) if sys_timer.now() >= tout  => {
-                let tx_size = BUF_LEN - xfrs  as usize;
-                let msg = unsafe{&RX_BUFFER[0..tx_size]};
-                let crc = calculate_crc16(msg);
-                rprintln!("beep: {:?} {:?}", crc, &msg[..tx_size-2]);
-                last_rcv_to = None;
-                last_xfs = BUF_LEN as u16;
-                unsafe{RX_BUFFER = [0; BUF_LEN]};
-                rx_transfer.next_transfer(unsafe{&mut RX_BUFFER});
-                rx_transfer.start(|_| ());
-            },
-            _ => {}
-        }
+        modbus.scan_rx_msg(|msg: &[u8] | {
+            rprintln!("--> on_receive: {:?}", &msg);
+        });
 
         // let tics = sys_timer.now();
         // let cur = clocks.sysclk();
