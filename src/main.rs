@@ -35,6 +35,11 @@ use light_ports::*;
 mod serial;
 use serial::*;
 
+mod modbus;
+use modbus::*;
+
+mod registers;
+use registers::*;
 
 #[entry]
 fn main() -> ! {
@@ -114,7 +119,8 @@ fn main() -> ! {
                     Reference::Size(2),
                     0
                 );
-                modbus.send_tx_msg(resp);
+                modbus.send_tx_msg(resp)
+                .unwrap_or_else(|_| { });
             }
         });
 

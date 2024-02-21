@@ -1,5 +1,3 @@
-use core::fmt::Error;
-
 use stm32f4xx_hal as hal;
 
 use crate::hal::rcc::*;
@@ -10,129 +8,18 @@ use crate::hal::timer::Counter;
 use crate::hal::gpio::{Pin, Output};
 use crate::hal::uart::{Rx, Tx};
 use crate::hal::serial::{config::Config, Serial};
-use crate::hal::dma::{Transfer, StreamsTuple, StreamX, PeripheralToMemory, MemoryToPeripheral};
+use crate::hal::dma::{Transfer, StreamsTuple, StreamX, PeripheralToMemory};
 use crate::hal::dma::config::DmaConfig;
 use crate::hal::pac::{USART2, DMA1};
 use crate::hal::time::Bps;
 
 use rtt_target::rprintln;
 
+use crate::modbus::*;
 
-pub fn calculate_crc16(data: &[u8]) -> u16{
-
-    let mut crc: u16 = 0xFFFF;  // Initial CRC value
-    let poly: u16 = 0xA001;  // CRC-16 polynomial
-
-    for &int_val in data {
-        crc ^= int_val as u16;
-        for _ in 0..8 {
-            if (crc & 0x0001) != 0 {
-                crc = (crc >> 1) ^ poly;
-            } else {
-                crc >>= 1;
-            }
-        }
-    }
-
-    crc
-
-}
-
-fn u16_to_u8_array(value: u16) -> [u8; 2] {
-    let byte1 = ((value >> 8) & 0xFF) as u8;
-    let byte0 = (value & 0xFF) as u8;
-    [byte1, byte0]
-}
-
-fn u8_array_to_u16(arr: &[u8; 2]) ->  u16{
-    let mut value: u16 = 0;
-    value += (arr[0] as u16) << 8;
-    value += (arr[1] as u16);
-
-    value
-}
-
-#[derive(PartialEq, Debug)]
-pub enum Reference {
-    Size(u8),
-    Address(u16)
-}
-
-#[derive(PartialEq, Debug)]
-pub struct ModbusFrame {
-    pub unit_id: u8,
-    pub command: u8,
-    pub refers: Reference,
-    pub value: u16
-}
-
-impl ModbusFrame {
-
-    pub fn new(unit_id: u8,
-        command: u8,
-        refers: Reference,
-        value: u16) -> Self {
-            Self {
-                unit_id,
-                command,
-                refers,
-                value
-            }
-    }
-
-    pub fn encode(&self, buffer: &mut [u8]) -> usize {
-
-        let mut len = 0;
-        buffer[len] = self.unit_id;
-        len += 1;
-        buffer[len] = self.command;
-        len += 1;
-        match self.refers {
-            Reference::Size(s) => {
-                buffer[len] = s;
-                len += 1;
-            },
-            Reference::Address(adr) => {
-                let tmp = u16_to_u8_array(adr);
-                buffer[len..len+2].copy_from_slice(&tmp);
-                len += 2;
-            },
-        }
-
-        let tmp = u16_to_u8_array(self.value);
-        buffer[len..len+2].copy_from_slice(&tmp);
-        len += 2;
-
-        let crc = calculate_crc16(&buffer[..len]);
-        let mut crc = u16_to_u8_array(crc);
-        crc.reverse();
-        buffer[len..len+2].copy_from_slice(&crc);
-        len += 2;
-
-        rprintln!("encoded: {:?}", &buffer[..len]);
-
-        len
-    }
-
-    pub fn decode(buffer: &[u8]) -> Result<Self, &str> {
-        rprintln!("decoded: {:?}", buffer);
-
-        let crc = calculate_crc16(buffer);
-        if crc != 0 { return Err("bad crc")};
-
-        Ok(Self {
-            unit_id: buffer[0],
-            command: buffer[1],
-            refers: Reference::Address(u8_array_to_u16(&buffer[2..4].try_into().unwrap())),
-            value: u8_array_to_u16(&buffer[4..6].try_into().unwrap())
-        })
-
-    }
-}
 
 // Create buffers for sending and receiving data
 const BUF_LEN: usize = 20;
-static mut TX_BUFFER: [u8; BUF_LEN] = [0; BUF_LEN];
 static mut RX_BUFFER: [u8; BUF_LEN] = [0; BUF_LEN];
 
 
@@ -180,12 +67,11 @@ impl <'a>ModbusTransceiver<'a> {
         .unwrap();
 
         // Split UART peripheral into transmitter and receiver
-        let (mut uart2_tx, uart2_rx) = usart2.split();
+        let (uart2_tx, uart2_rx) = usart2.split();
 
 
         // Initialize DMA
         let dma_channels = StreamsTuple::new(dma1);
-        let tx_channel = dma_channels.6;
         let rx_channel = dma_channels.5;
 
 
@@ -250,7 +136,8 @@ impl <'a>ModbusTransceiver<'a> {
                 self.last_rcv_to = None;
                 self.last_xfs = BUF_LEN as u16;
                 unsafe{RX_BUFFER = [0; BUF_LEN]};
-                self.rx_transfer.next_transfer(unsafe{&mut RX_BUFFER});
+                self.rx_transfer.next_transfer(unsafe{&mut RX_BUFFER})
+                .unwrap();
             },
             _ => {}
         }
