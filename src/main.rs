@@ -1,8 +1,3 @@
-
-
-
-
-
 #![no_main]
 #![no_std]
 
@@ -50,7 +45,7 @@ fn main() -> ! {
     // Acquire the device peripherals
     let dp = pac::Peripherals::take().unwrap();
 
-    // Configure the RCC (Reset and Clock Control) peripheral to enable GPIOA
+    // Configure the RCC (Reset and Clock Control) peripheral to enable GPIO
     let rcc = dp.RCC.constrain();
     let clocks: hal::rcc::Clocks = rcc.cfgr.sysclk(48.MHz()).freeze();
 
@@ -110,19 +105,14 @@ fn main() -> ! {
             _ => {}
         };
 
+        modbus.scan_rx_msg(|msg: &ModbusFrame | {
+            rprintln!("--> on_receive: {:?}", msg);
+        });
+
         // cortex_m::asm::delay(1_000_000);
         // this si a bit mickey mouse but it hunts for now
         let timeout: fugit::Instant<u32, 1, 1000> = sys_timer.now() + 1.millis();
-        while sys_timer.now() < timeout {
+        while sys_timer.now() < timeout { }
 
-        }
-
-        modbus.scan_rx_msg(|msg: &[u8] | {
-            rprintln!("--> on_receive: {:?}", &msg);
-        });
-
-        // let tics = sys_timer.now();
-        // let cur = clocks.sysclk();
-        // rprintln!("clk: {:?} {:?}", cur, tics);
 
     }}
