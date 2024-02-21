@@ -60,10 +60,10 @@ pub enum Reference {
 
 #[derive(PartialEq, Debug)]
 pub struct ModbusFrame {
-    unit_id: u8,
-    command: u8,
-    refers: Reference,
-    value: u16
+    pub unit_id: u8,
+    pub command: u8,
+    pub refers: Reference,
+    pub value: u16
 }
 
 impl ModbusFrame {
@@ -104,14 +104,19 @@ impl ModbusFrame {
         len += 2;
 
         let crc = calculate_crc16(&buffer[..len]);
-        let crc = u16_to_u8_array(crc);
+        let mut crc = u16_to_u8_array(crc);
+        crc.reverse();
         buffer[len..len+2].copy_from_slice(&crc);
         len += 2;
+
+        rprintln!("encoded: {:?}", &buffer[..len]);
 
         len
     }
 
     pub fn decode(buffer: &[u8]) -> Result<Self, &str> {
+        rprintln!("decoded: {:?}", buffer);
+
         let crc = calculate_crc16(buffer);
         if crc != 0 { return Err("bad crc")};
 
@@ -222,7 +227,7 @@ impl <'a>ModbusTransceiver<'a> {
 
     pub fn scan_rx_msg<F>(&mut self, on_receive: F)
     where
-        F: Fn(&ModbusFrame),
+        F: Fn(&ModbusFrame, &mut Self),
     {
         let xfrs = self.rx_transfer.number_of_transfers();
         if self.last_xfs != xfrs {
@@ -237,7 +242,7 @@ impl <'a>ModbusTransceiver<'a> {
 
                 match ModbusFrame::decode(msg) {
                     Ok(msg) => {
-                        on_receive(&msg);
+                        on_receive(&msg, self);
                     }
                     _ => {}
                 }
@@ -253,6 +258,8 @@ impl <'a>ModbusTransceiver<'a> {
     }
 
     pub fn send_tx_msg(&mut self, msg: ModbusFrame) -> Result<(), &str> {
+
+        rprintln!("<-- send: {:?}", msg);
 
         self.den.set_high();
 
@@ -273,7 +280,6 @@ impl <'a>ModbusTransceiver<'a> {
         while self.sys_timer.now() < timeout { }
 
         self.den.set_low();
-
         Ok(())
 
     }

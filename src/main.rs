@@ -105,8 +105,17 @@ fn main() -> ! {
             _ => {}
         };
 
-        modbus.scan_rx_msg(|msg: &ModbusFrame | {
+        modbus.scan_rx_msg(|msg: &ModbusFrame, modbus | {
             rprintln!("--> on_receive: {:?}", msg);
+            if msg.unit_id == 1 {
+                let resp = ModbusFrame::new(
+                    msg.unit_id,
+                    msg.command,
+                    Reference::Size(2),
+                    0
+                );
+                modbus.send_tx_msg(resp);
+            }
         });
 
         // cortex_m::asm::delay(1_000_000);
