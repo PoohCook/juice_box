@@ -30,6 +30,30 @@ impl ModbusFrame {
             }
     }
 
+    pub fn read_reply(&self, value: u16) -> ModbusFrame{
+        ModbusFrame::new(
+            self.unit_id,
+            self.command,
+            Reference::Size(2),
+            value
+        )
+    }
+
+    pub fn write_reply(&self, value: u16) -> ModbusFrame{
+        let addr = match self.refers{
+            Reference::Address(addr) => {addr},
+            _ => {0}
+        };
+
+        ModbusFrame::new(
+            self.unit_id,
+            self.command,
+            Reference::Address(addr),
+            value
+        )
+    }
+
+
     pub fn encode(&self, buffer: &mut [u8]) -> usize {
 
         let mut len = 0;

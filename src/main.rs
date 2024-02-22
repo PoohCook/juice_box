@@ -38,9 +38,6 @@ use serial::*;
 mod modbus;
 use modbus::*;
 
-mod registers;
-use registers::*;
-
 #[entry]
 fn main() -> ! {
     rtt_init_print!();
@@ -112,15 +109,15 @@ fn main() -> ! {
 
         modbus.scan_rx_msg(|msg: &ModbusFrame, modbus | {
             rprintln!("--> on_receive: {:?}", msg);
-            if msg.unit_id == 1 {
-                let resp = ModbusFrame::new(
-                    msg.unit_id,
-                    msg.command,
-                    Reference::Size(2),
-                    0
-                );
-                modbus.send_tx_msg(resp)
-                .unwrap_or_else(|_| { });
+            for chrg in &mut chargers{
+                match chrg.query(msg) {
+                    Ok(reply) => {
+                        modbus.send_tx_msg(reply)
+                        .unwrap_or_else(|_| { });
+                        break;
+                    },
+                    _ => {}
+                }
             }
         });
 
