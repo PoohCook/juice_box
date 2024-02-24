@@ -143,6 +143,7 @@ impl EVCharger {
                     self.registers.current_state = state.to();
                 }
                 self.registers.charge_control = request.value;
+                self.update = true;
                 Ok(request.write_reply(self.registers.charge_control))
             },
             (6, SERVICE_CONTROL)  => {
@@ -153,6 +154,7 @@ impl EVCharger {
                     self.registers.current_state = state.to();
                 }
                 self.registers.service_control = request.value;
+                self.update = true;
                 Ok(request.write_reply(self.registers.service_control))
             },
             _ => {return Err("invalid operation")}

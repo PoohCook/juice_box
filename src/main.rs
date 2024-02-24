@@ -77,7 +77,7 @@ fn main() -> ! {
     let mut buffer = [0u8; (LED_NUM * 12) + 30];
     let mut lights = LightPorts::new(gpioa.pa5, gpioa.pa7, dp.SPI1, &mut buffer, &clocks, &sys_timer);
 
-    let mut chargers = [
+    let mut chargers: [EVCharger; 4] = [
         EVCharger::new(1, 0),
         EVCharger::new(2, 1),
         EVCharger::new(3, 2),
@@ -107,19 +107,17 @@ fn main() -> ! {
             _ => {}
         };
 
-        modbus.scan_rx_msg(|msg: &ModbusFrame, modbus | {
+        {modbus.scan_rx_msg(&mut chargers,
+                            |msg: &ModbusFrame, chargers | {
             rprintln!("--> on_receive: {:?}", msg);
-            for chrg in &mut chargers{
+            for chrg in chargers{
                 match chrg.query(msg) {
-                    Ok(reply) => {
-                        modbus.send_tx_msg(reply)
-                        .unwrap_or_else(|_| { });
-                        break;
-                    },
+                    Ok(reply) => {return Some(reply);},
                     _ => {}
                 }
             }
-        });
+            None
+        });}
 
         // cortex_m::asm::delay(1_000_000);
         // this si a bit mickey mouse but it hunts for now

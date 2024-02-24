@@ -16,6 +16,7 @@ use crate::hal::time::Bps;
 use rtt_target::rprintln;
 
 use crate::modbus::*;
+use crate::ev_charger::*;
 
 
 // Create buffers for sending and receiving data
@@ -111,9 +112,9 @@ impl <'a>ModbusTransceiver<'a> {
 
     }
 
-    pub fn scan_rx_msg<F>(&mut self, on_receive: F)
+    pub fn scan_rx_msg<F>(&mut self, chargers: &mut [EVCharger; 4], on_receive: F)
     where
-        F: Fn(&ModbusFrame, &mut Self),
+        F: Fn(&ModbusFrame, &mut [EVCharger; 4]) -> Option<ModbusFrame>,
     {
         let xfrs = self.rx_transfer.number_of_transfers();
         if self.last_xfs != xfrs {
@@ -128,7 +129,13 @@ impl <'a>ModbusTransceiver<'a> {
 
                 match ModbusFrame::decode(msg) {
                     Ok(msg) => {
-                        on_receive(&msg, self);
+                        match on_receive(&msg, chargers) {
+                            Some(reply) => {
+                                self.send_tx_msg(reply)
+                                .unwrap_or_else(|err| {rprintln!("Bad Sed: {}", err); });
+                            },
+                            _ => ()
+                        }
                     }
                     _ => {}
                 }
