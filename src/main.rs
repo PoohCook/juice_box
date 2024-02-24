@@ -13,7 +13,7 @@ use crate::hal::prelude::*;
 use crate::hal::timer::Counter;
 
 use crate::hal::otg_fs::{UsbBus, USB};
-use usb_device::{descriptor, prelude::*};
+use usb_device::prelude::*;
 static mut EP_MEMORY: [u32; 1024] = [0; 1024];
 use ws2812_spi as ws2812;
 
@@ -40,6 +40,9 @@ use serial::*;
 
 mod modbus;
 use modbus::*;
+
+mod usb;
+use usb::*;
 
 #[entry]
 fn main() -> ! {
@@ -95,26 +98,21 @@ fn main() -> ! {
         pin_dp: stm32f4xx_hal::gpio::alt::otg_fs::Dp::PA12(gpioa.pa12.into_alternate()),
         hclk: clocks.hclk(),
     };
-
     let usb_bus = UsbBus::new(usb, unsafe { &mut EP_MEMORY });
-
-    let mut serial = usbd_serial::SerialPort::new(&usb_bus);
-
+    let serial = usbd_serial::SerialPort::new(&usb_bus);
     let descriptors = [StringDescriptors::new(LangID::EN)
         .manufacturer("UpnUp")
         .product("Juice Box")
         .serial_number("ss0000001")
     ];
-
-    let mut usb_dev = UsbDeviceBuilder::new(&usb_bus, UsbVidPid(0x1642, 0x0003))
+    let usb_dev = UsbDeviceBuilder::new(&usb_bus, UsbVidPid(0x1642, 0x0003))
         .device_class(usbd_serial::USB_CLASS_CDC)
         .strings(&descriptors).unwrap()
         .build();
 
-    rprintln!("USB Built");
+    let mut command_processor = UsbCommandProcessor::new(usb_dev, serial);
 
-    let mut com_buf = [0u8; 64];
-    let mut com_indx: usize = 0;
+    rprintln!("USB Built");
 
     loop {
         let mut updated = false;
@@ -140,7 +138,7 @@ fn main() -> ! {
         };
 
         {modbus.scan_rx_msg(&mut chargers,
-                            |msg: &ModbusFrame, chargers | {
+                            |msg: &ModbusFrame, chargers: &mut [EVCharger; 4] | {
             rprintln!("--> on_receive: {:?}", msg);
             for chrg in chargers{
                 match chrg.query(msg) {
@@ -151,37 +149,7 @@ fn main() -> ! {
             None
         });}
 
-        let mut buf = [0u8; 64];
-
-        if usb_dev.poll(&mut [&mut serial]) {
-            match serial.read(&mut buf) {
-                Ok(count) if count > 0 => {
-
-                    for chr in &buf[0..count] {
-                        com_buf[com_indx] = *chr;
-                        com_indx += 1;
-                    }
-
-                    let mut write_offset = 0;
-                    while write_offset < count {
-                        match serial.write(&buf[write_offset..count]) {
-                            Ok(len) if len > 0 => {
-                                write_offset += len;
-                            }
-                            _ => {}
-                        }
-                    }
-
-                    let command = core::str::from_utf8(&com_buf[0..com_indx]).unwrap_or_default();
-                    if command.contains("\r"){
-                        rprintln!("command: {}",  command);
-                    }
-
-
-                }
-                _ => {}
-            }
-        }
+        command_processor.poll(&mut chargers);
 
         // cortex_m::asm::delay(1_000_000);
         // this si a bit mickey mouse but it hunts for now
