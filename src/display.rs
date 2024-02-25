@@ -20,6 +20,14 @@ pub struct TM1638 {
 }
 
 impl TM1638 {
+    /// Create a new LED 7 segment display driver and key scanner
+    /// * `pc8` - GPIO for STB.
+    /// * `pc9` - GPIO for CLK.
+    /// * `pc10` - GPIO for DIO.
+    /// # Returns
+    ///
+    /// The TM1638 Instance
+    ///
     pub fn new(
         pc8: Pin<'C', 8>,
         pc9: Pin<'C', 9>,
@@ -139,6 +147,9 @@ impl TM1638 {
         }
     }
 
+    /// Initialize display to all blank and set brightness
+    ///
+    /// * `brightness` - 0 through 7 from lowest to highest brightness.
     pub fn initialize(&mut self, brightness: u8) {
         self.brightness = brightness & 0x07;
         self.write_command(0xc0);
@@ -148,12 +159,21 @@ impl TM1638 {
 
     }
 
+    /// Set brightness for display
+    ///
+    /// * `brightness` - 0 through 7 from lowest to highest brightness.
     pub fn set_brightness(&mut self, brightness: u8) {
         self.brightness = brightness & 0x07;
         self.write_display_command();
 
     }
 
+    /// Display a number 0 - 99 on a given bank of the display
+    ///
+    /// leading 0 is displayed blank
+    ///
+    /// * `bank` - 0 through 3 to index display digit pairs form left to right.
+    /// * `number` the number to display form 0 - 99. if more than 99, blank will be displayed
     pub fn display_num (&mut self, bank: u8, number: u8){
 
         let mut disp: [u8; 2] = [DIGITS[11], DIGITS[11]];
@@ -174,7 +194,7 @@ impl TM1638 {
         self.write_display_command();
     }
 
-    pub fn read_buttons(&mut self) -> u8{
+    fn read_buttons(&mut self) -> u8{
 
         self.dio.make_push_pull_output();
 
@@ -206,7 +226,13 @@ impl TM1638 {
 
     }
 
-    pub fn get_key_events(& mut self) -> Option<KeyEvent> {
+    /// Scan for any new key events that have occured since last scan
+    ///
+    /// # Returns
+    ///
+    /// an Optional key event or None
+    ///
+    pub fn scan_key_events(& mut self) -> Option<KeyEvent> {
 
         let key_data = self.read_buttons();
         if self.key_status == key_data{

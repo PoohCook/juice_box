@@ -46,6 +46,24 @@ pub struct TestPoints {
     pub tp8: Pin<'C', 7, Output<PushPull>>,
 }
 impl TestPoints {
+    /// Creates a new TestPoints structure.
+    ///
+    /// Structure allows setting and reseting of TestPoint IO
+    /// # Arguments
+    ///
+    /// * `pc0` - GPIO for TP1.
+    /// * `pc1` - GPIO for TP2.
+    /// * `pc2` - GPIO for TP3.
+    /// * `pc3` - GPIO for TP4.
+    /// * `pc4` - GPIO for TP5.
+    /// * `pc5` - GPIO for TP6.
+    /// * `pc6` - GPIO for TP7.
+    /// * `pc7` - GPIO for TP8.
+    ///
+    /// # Returns
+    ///
+    /// The TestPoints Instance
+    ///
     pub fn new(
         pc0: Pin<'C', 0>,
         pc1: Pin<'C', 1>,
@@ -69,6 +87,7 @@ impl TestPoints {
         }
     }
 
+    /// Reset all TPs to high value (LED Off)
     pub fn reset_all(&mut self){
         self.tp1.set_high();
         self.tp2.set_high();
@@ -82,6 +101,9 @@ impl TestPoints {
     }
 
     #[allow(dead_code)]
+    /// Write all test points using a bit mask
+    ///
+    ///  mask value of 0x01 denotes TP set and all other TPs as reset
     pub fn write_value(&mut self, val: u8){
         self.reset_all();
 

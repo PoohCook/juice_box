@@ -131,7 +131,7 @@ fn main() -> ! {
         lights.refresh( updated);
 
         //  process any key events
-        let key_event = display.get_key_events();
+        let key_event = display.scan_key_events();
         match key_event {
             Some(ev) => {
                 for chrg in &mut chargers {
