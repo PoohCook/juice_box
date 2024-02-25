@@ -51,7 +51,6 @@ impl EVCharger {
                 self.update = true;
             },
             KeyEvent::KeyDown { key } if *key == self.aux_key => {
-                self.unit_id += 1;
                 self.key_colors[1] = Colors::Blue.as_rgb();
                 self.update = true;
             },
@@ -160,6 +159,19 @@ impl EVCharger {
             _ => {return Err("invalid operation")}
         }
 
+    }
+
+    pub fn get_id(&self) -> u8{
+        self.unit_id
+    }
+
+    pub fn set_id(&mut self, new_id: u8) -> u8{
+        self.unit_id = new_id;
+        self.update = true;
+        self.registers.current_state = 0x0001;
+        self.registers.charge_control = 0x0000;
+        self.registers.service_control = 0x0000;
+        self.unit_id
     }
 
 

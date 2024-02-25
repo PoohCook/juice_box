@@ -66,23 +66,22 @@ fn main() -> ! {
     // let gpiod = dp.GPIOD.split();
     // let gpioe = dp.GPIOE.split();
 
-    let mut modbus = ModbusTransceiver::new(gpioa.pa2, gpioa.pa3, gpioa.pa4, dp.USART2, dp.DMA1, &clocks, &sys_timer);
-
-    // Configure PA5 as a digital output
+    // Setup test point support
     let mut test_point = TestPoints::new(
         gpioc.pc0, gpioc.pc1, gpioc.pc2, gpioc.pc3, gpioc.pc4, gpioc.pc5, gpioc.pc6, gpioc.pc7,
     );
     test_point.reset_all();
 
-    // Configure SPI peripheral
+    // Configure TM1638 display support
     let mut display = TM1638::new(gpioc.pc8, gpioc.pc9, gpioc.pc10,);
-
     display.initialize(7);
     display.set_brightness(7);
 
+    //  Initialize Ws2812 LED support
     let mut buffer = [0u8; (LED_NUM * 12) + 30];
     let mut lights = LightPorts::new(gpioa.pa5, gpioa.pa7, dp.SPI1, &mut buffer, &clocks, &sys_timer);
 
+    // Initialize the bank of EvCharger units
     let mut chargers: [EVCharger; 4] = [
         EVCharger::new(1, 0),
         EVCharger::new(2, 1),
@@ -90,6 +89,10 @@ fn main() -> ! {
         EVCharger::new(4, 3),
     ];
 
+    // Initialize Modbus interface
+    let mut modbus = ModbusTransceiver::new(gpioa.pa2, gpioa.pa3, gpioa.pa4, dp.USART2, dp.DMA1, &clocks, &sys_timer);
+
+    // Initialize the USBdevice as a serial adaptor
     let usb = USB {
         usb_global: dp.OTG_FS_GLOBAL,
         usb_device: dp.OTG_FS_DEVICE,
@@ -110,11 +113,13 @@ fn main() -> ! {
         .strings(&descriptors).unwrap()
         .build();
 
-    let mut command_processor = UsbCommandProcessor::new(usb_dev, serial);
+    // Initialize the USB Command Processor
+    let mut usb_processor = UsbCommandProcessor::new(usb_dev, serial);
 
     rprintln!("USB Built");
 
     loop {
+        // refresh the UI for each charger
         let mut updated = false;
         for chrg in &mut chargers {
             if chrg.refresh_ui(&mut display, &mut lights) {
@@ -122,11 +127,10 @@ fn main() -> ! {
             }
         }
 
+        // refresh the ws2812 leds to facilitate blinking behavour
         lights.refresh( updated);
 
-        test_point.reset_all();
-        set!(test_point, 6);
-
+        //  process any key events
         let key_event = display.get_key_events();
         match key_event {
             Some(ev) => {
@@ -137,6 +141,7 @@ fn main() -> ! {
             _ => {}
         };
 
+        // process any recieved modbus commands
         {modbus.scan_rx_msg(&mut chargers,
                             |msg: &ModbusFrame, chargers: &mut [EVCharger; 4] | {
             rprintln!("--> on_receive: {:?}", msg);
@@ -149,10 +154,12 @@ fn main() -> ! {
             None
         });}
 
-        command_processor.poll(&mut chargers);
+        //  process any USB commands
+        usb_processor.poll(&mut chargers);
 
-        // cortex_m::asm::delay(1_000_000);
-        // this si a bit mickey mouse but it hunts for now
+
+        // delay 1 msec to reduce overhead
+        // this is a bit mickey mouse but it hunts for now
         let timeout: fugit::Instant<u32, 1, 1000> = sys_timer.now() + 1.millis();
         while sys_timer.now() < timeout { }
 
