@@ -83,10 +83,10 @@ fn main() -> ! {
 
     // Initialize the bank of EvCharger units
     let mut chargers: [EVCharger; 4] = [
-        EVCharger::new(1, 0),
-        EVCharger::new(2, 1),
-        EVCharger::new(3, 2),
-        EVCharger::new(4, 3),
+        EVCharger::new(1, 0, &sys_timer),
+        EVCharger::new(2, 1, &sys_timer),
+        EVCharger::new(3, 2, &sys_timer),
+        EVCharger::new(4, 3, &sys_timer),
     ];
 
     // Initialize Modbus interface

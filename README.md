@@ -19,7 +19,7 @@ $ cargo install probe-rs --features cli
 
 - `rust-std` components (pre-compiled `core` crate) for the ARM Cortex-M
   targets. Run:
-  
+
 ``` console
 $ rustup target add thumbv6m-none-eabi thumbv7m-none-eabi thumbv7em-none-eabi thumbv7em-none-eabihf
 ```
@@ -64,3 +64,11 @@ to intervene to uphold that code of conduct.
 
 [CoC]: https://www.rust-lang.org/policies/code-of-conduct
 # juice_box
+
+on my mac I use these commands
+
+to flash:
+cargo flash --chip STM32F405RGTx --release
+
+to run with diagnostic feed:
+cargo run --release 

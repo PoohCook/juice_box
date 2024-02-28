@@ -1,3 +1,9 @@
+
+use crate::hal::pac::TIM2;
+use crate::hal::timer::Counter;
+use crate::hal::prelude::*;
+use fugit::Instant;
+
 use crate::{KeyEvent, LightPorts, TM1638};
 use smart_leds::RGB8;
 use crate::Colors;
@@ -7,6 +13,7 @@ use crate::modbus::*;
 const CURRENT_STATE: u16 = 0x3040;
 const CHARGE_CONTROL: u16 = 0x4010;
 const SERVICE_CONTROL: u16 = 0x4012;
+const SECOND: u32 = 1000;
 
 struct Registers{
     current_state: u16,
@@ -14,18 +21,21 @@ struct Registers{
     service_control: u16,
 }
 
-pub struct EVCharger {
+pub struct EVCharger<'a> {
     unit_id: u8,
     ui_bank: u8,
     update: bool,
     service_key: u8,
     aux_key: u8,
     key_colors: [RGB8; 2],
-    registers: Registers
+    registers: Registers,
+    charge_sec: u8,
+    sys_timer: &'a Counter<TIM2, 1000>,
+    charge_next: Instant<u32, 1, 1000>,
 }
 
-impl EVCharger {
-    pub fn new(unit_id: u8, ui_bank: u8) -> Self {
+impl <'a>EVCharger<'a> {
+    pub fn new(unit_id: u8, ui_bank: u8, sys_timer: &'a Counter<TIM2, 1000>,) -> Self {
         Self {
             unit_id,
             ui_bank,
@@ -38,7 +48,11 @@ impl EVCharger {
                 current_state: 0x0001,
                 charge_control: 0x0000,
                 service_control: 0x0000
-            }
+            },
+            charge_sec: 0,
+            sys_timer,
+            charge_next: sys_timer.now(),
+
         }
     }
 
@@ -106,9 +120,33 @@ impl EVCharger {
         }
     }
 
+    fn refresh_display(&mut self, display: &mut TM1638){
+        match self.get_state() {
+            unit  if unit.charger == ChgState::Wait => {
+                display.display_num(self.ui_bank, self.unit_id);
+            },
+            unit  if unit.charger == ChgState::Standby => {
+                display.display_num(self.ui_bank, self.charge_sec);
+            },
+            unit  if unit.charger == ChgState::Connect => {
+                display.display_num(self.ui_bank, self.charge_sec);
+            },
+            unit  if unit.charger == ChgState::Charge => {
+                if self.sys_timer.now() > self.charge_next {
+                    self.charge_next = self.sys_timer.now() + SECOND.millis();
+                    self.charge_sec += 1;
+                }
+                display.display_num(self.ui_bank, self.charge_sec);
+            },
+            _ => {}
+        }
+
+    }
+
     pub fn refresh_ui(&mut self, display: &mut TM1638, light_ports: &mut LightPorts) -> bool {
-        if self.update{
-            display.display_num(self.ui_bank, self.unit_id);
+        if self.update ||
+           (self.get_state().charger == ChgState::Charge && self.sys_timer.now() > self.charge_next){
+            self.refresh_display(display);
 
             self.update_led_status(light_ports);
 
@@ -140,6 +178,7 @@ impl EVCharger {
                     state.set_charge_control(request.value);
                     state.changed = true;
                     self.registers.current_state = state.to();
+                    self.charge_sec = 0;
                 }
                 self.registers.charge_control = request.value;
                 self.update = true;
